@@ -12,9 +12,7 @@ const client = new Client({
 client.connect();
 
 // テーブルをアップデート（nameとtimeを追加）
-client.query('DROP TABLE IF EXISTS messages'); // 古いテーブルを消す命令
 client.query('CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, name TEXT, content TEXT, time TEXT)');
-app.use(express.static('public'));
 
 io.on('connection', async (socket) => {
   // 過去ログ取得
