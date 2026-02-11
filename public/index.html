@@ -1,72 +1,171 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mochi Chat Pro</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Mochi Chat Pro - Final</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: sans-serif; background-color: #7494c0; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; padding-bottom: 80px; }
-        #messages li { margin-bottom: 15px; clear: both; display: flex; flex-direction: column; }
+        body { font-family: sans-serif; background-color: #7494c0; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
         
-        /* 吹き出しの共通スタイル */
-        .msg-text { padding: 8px 12px; border-radius: 15px; max-width: 70%; word-wrap: break-word; position: relative; }
-        .name { font-size: 0.8em; color: white; margin-bottom: 2px; }
-        .time { font-size: 0.6em; color: #eee; margin-top: 2px; }
+        /* 吹き出しの基本構造 */
+        .msg-item { margin-bottom: 15px; display: flex; flex-direction: column; max-width: 85%; position: relative; }
+        .name { font-size: 0.8em; color: white; margin-bottom: 3px; }
+        .bubble-container { display: flex; align-items: flex-end; gap: 5px; }
+        .msg-text { padding: 10px 14px; border-radius: 18px; font-size: 15px; word-wrap: break-word; line-height: 1.4; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .time { font-size: 0.65em; color: #eee; min-width: 40px; }
 
-        /* 自分（右側） */
-        .mine { align-items: flex-end; }
+        /* 既読数表示（メッセージの中央側に配置） */
+        .read-status { font-size: 0.7em; color: #d1ffc4; font-weight: bold; margin: 0 2px; }
+
+        /* 自分（右側・緑） */
+        .mine { align-self: flex-end; }
+        .mine .bubble-container { flex-direction: row-reverse; }
         .mine .msg-text { background-color: #8de055; border-top-right-radius: 2px; }
         
-        /* 相手（左側） */
-        .others { align-items: flex-start; }
+        /* 他人（左側・白） */
+        .others { align-self: flex-start; }
         .others .msg-text { background-color: white; border-top-left-radius: 2px; }
 
-        #form { background: white; padding: 10px; display: flex; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; gap: 5px; }
-        #name-input { width: 80px; border: 1px solid #ccc; border-radius: 10px; padding: 5px; }
-        #input { border: 1px solid #ccc; padding: 10px; flex-grow: 1; border-radius: 20px; outline: none; }
-        #send { border: none; background: #8de055; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        /* リアクション */
+        .reaction-badge { position: absolute; bottom: -8px; right: 10px; background: white; border-radius: 10px; padding: 1px 5px; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid #ddd; }
+
+        /* 長押しメニュー */
+        #context-menu { display: none; position: fixed; background: #333; color: white; border-radius: 12px; padding: 5px 0; z-index: 1000; min-width: 140px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        .menu-item { padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #444; }
+        .menu-item:last-child { border-bottom: none; }
+        .menu-item:active { background: #555; }
+
+        /* 入力エリア */
+        #form-container { background: white; padding: 10px; border-top: 1px solid #ddd; padding-bottom: 25px; }
+        #reply-preview { display: none; padding: 8px; background: #f0f0f0; font-size: 12px; border-left: 4px solid #8de055; margin-bottom: 8px; border-radius: 4px; }
+        #form { display: flex; gap: 8px; align-items: center; }
+        #input { flex-grow: 1; border: 1px solid #ccc; padding: 12px; border-radius: 25px; outline: none; font-size: 16px; }
+        #send { border: none; background: #8de055; color: #333; width: 60px; height: 40px; border-radius: 20px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
     <ul id="messages"></ul>
-    <form id="form">
-        <input id="name-input" placeholder="名前" value="ななし">
-        <input id="input" autocomplete="off" placeholder="メッセージ..." /><button id="send">送信</button>
-    </form>
+    
+    <div id="context-menu"></div>
+
+    <div id="form-container">
+        <div id="reply-preview"></div>
+        <form id="form">
+            <input id="input" autocomplete="off" placeholder="メッセージを入力..." /><button id="send">送信</button>
+        </form>
+    </div>
 
     <script>
         var socket = io();
-        var form = document.getElementById('form');
-        var input = document.getElementById('input');
-        var nameInput = document.getElementById('name-input');
-        var messages = document.getElementById('messages');
+        var selectedMsgId = null;
+        var longPressTimer;
+        var replyToId = null;
 
-        form.addEventListener('submit', function(e) {
+        // 名前設定（一度入力すると保存されます）
+        var myName = localStorage.getItem('chat-name') || prompt("チャットで使う名前を入力してね") || "ななし";
+        localStorage.setItem('chat-name', myName);
+
+        // メッセージを表示する関数
+        function addMessage(data) {
+            var item = document.createElement('li');
+            item.className = `msg-item ${data.name === myName ? 'mine' : 'others'}`;
+            item.setAttribute('data-id', data.id);
+            item.setAttribute('data-readers', data.readers || 'まだ誰も読んでいません');
+
+            const readText = data.readCount > 0 ? `既読 ${data.readCount}` : '';
+
+            item.innerHTML = `
+                <div class="name">${data.name}</div>
+                <div class="bubble-container">
+                    <div class="msg-text">${data.message}</div>
+                    <div class="read-status">${readText}</div>
+                    <div class="time">${data.time}</div>
+                </div>
+                ${data.reaction ? `<div class="reaction-badge">${data.reaction}</div>` : ''}
+            `;
+
+            // スマホ・PC両対応の長押しイベント
+            item.addEventListener('touchstart', (e) => startPress(e, data.id, data.name === myName));
+            item.addEventListener('mousedown', (e) => startPress(e, data.id, data.name === myName));
+            item.addEventListener('touchend', cancelPress);
+            item.addEventListener('mouseup', cancelPress);
+
+            document.getElementById('messages').appendChild(item);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+
+            // 他人のメッセージなら自動で「既読」をサーバーに送る
+            if (data.name !== myName) {
+                socket.emit('mark as read', { id: data.id, userName: myName });
+            }
+        }
+
+        // --- 長押し処理 ---
+        function startPress(e, id, isMine) {
+            const x = e.pageX || (e.touches ? e.touches[0].pageX : 0);
+            const y = e.pageY || (e.touches ? e.touches[0].pageY : 0);
+            longPressTimer = setTimeout(() => showMenu(id, isMine, x, y), 600);
+        }
+        function cancelPress() { clearTimeout(longPressTimer); }
+
+        function showMenu(id, isMine, x, y) {
+            selectedMsgId = id;
+            var readers = document.querySelector(`li[data-id="${id}"]`).getAttribute('data-readers');
+            var menu = document.getElementById('context-menu');
+            menu.style.display = 'block';
+            menu.style.left = Math.min(x, window.innerWidth - 150) + 'px';
+            menu.style.top = Math.min(y, window.innerHeight - 200) + 'px';
+
+            let html = `<div class="menu-item" onclick="alert('既読者リスト:\\n${readers}')">既読者を確認</div>`;
+            html += `<div class="menu-item" onclick="setReply()">リプライ</div>`;
+            
+            if (isMine) {
+                html += `<div class="menu-item" onclick="deleteMsg()" style="color:#ff5555;">送信取り消し</div>`;
+            } else {
+                html += `<div class="menu-item" onclick="sendReaction('👍')">リアクション 👍</div>`;
+            }
+            menu.innerHTML = html;
+        }
+
+        function closeMenu() { document.getElementById('context-menu').style.display = 'none'; }
+        document.addEventListener('click', closeMenu);
+
+        // --- アクション関数 ---
+        function deleteMsg() { socket.emit('delete message', selectedMsgId); }
+        function sendReaction(emoji) { socket.emit('reaction', { id: selectedMsgId, emoji: emoji }); }
+        function setReply() {
+            replyToId = selectedMsgId;
+            const preview = document.getElementById('reply-preview');
+            preview.style.display = 'block';
+            preview.innerText = 'リプライを送信中... (長押しメニューから解除不可)';
+        }
+
+        // --- 通信処理 ---
+        document.getElementById('form').addEventListener('submit', function(e) {
             e.preventDefault();
+            var input = document.getElementById('input');
             if (input.value) {
-                const data = {
-                    name: nameInput.value || 'ななし',
+                socket.emit('chat message', {
+                    name: myName,
                     message: input.value,
                     time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                };
-                socket.emit('chat message', data);
+                });
                 input.value = '';
+                document.getElementById('reply-preview').style.display = 'none';
+                replyToId = null;
             }
         });
 
-        socket.on('chat message', function(data) {
-            var item = document.createElement('li');
-            // 自分の名前と一致するかで左右を分ける（簡易判定）
-            item.classList.add(data.name === nameInput.value ? 'mine' : 'others');
-            
-            item.innerHTML = `
-                <div class="name">${data.name}</div>
-                <div class="msg-text">${data.message}</div>
-                <div class="time">${data.time}</div>
-            `;
-            messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight;
+        socket.on('chat message', addMessage);
+        socket.on('delete message', id => document.querySelector(`li[data-id="${id}"]`)?.remove());
+        socket.on('update reaction', data => location.reload()); // リアクション時は簡易的にリロード
+        socket.on('update read', data => {
+            const el = document.querySelector(`li[data-id="${data.id}"]`);
+            if (el) {
+                const status = el.querySelector('.read-status');
+                status.innerText = `既読 ${data.count}`;
+                el.setAttribute('data-readers', data.readers);
+            }
         });
     </script>
 </body>
