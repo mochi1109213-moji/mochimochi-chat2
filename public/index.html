@@ -1,41 +1,72 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mochi Chat</title>
+    <title>Mochi Chat Pro</title>
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #7494c0; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; }
-        #messages li { margin-bottom: 15px; clear: both; }
-        .msg-text { padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 70%; word-wrap: break-word; background-color: white; }
-        #form { background: white; padding: 10px; display: flex; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; }
+        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; padding-bottom: 80px; }
+        #messages li { margin-bottom: 15px; clear: both; display: flex; flex-direction: column; }
+        
+        /* 吹き出しの共通スタイル */
+        .msg-text { padding: 8px 12px; border-radius: 15px; max-width: 70%; word-wrap: break-word; position: relative; }
+        .name { font-size: 0.8em; color: white; margin-bottom: 2px; }
+        .time { font-size: 0.6em; color: #eee; margin-top: 2px; }
+
+        /* 自分（右側） */
+        .mine { align-items: flex-end; }
+        .mine .msg-text { background-color: #8de055; border-top-right-radius: 2px; }
+        
+        /* 相手（左側） */
+        .others { align-items: flex-start; }
+        .others .msg-text { background-color: white; border-top-left-radius: 2px; }
+
+        #form { background: white; padding: 10px; display: flex; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; gap: 5px; }
+        #name-input { width: 80px; border: 1px solid #ccc; border-radius: 10px; padding: 5px; }
         #input { border: 1px solid #ccc; padding: 10px; flex-grow: 1; border-radius: 20px; outline: none; }
-        #send { border: none; background: #8de055; padding: 0 20px; margin-left: 5px; border-radius: 20px; font-weight: bold; }
+        #send { border: none; background: #8de055; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
     <ul id="messages"></ul>
-    <form id="form" action="">
-        <input id="input" autocomplete="off" placeholder="メッセージを入力..." /><button id="send">送信</button>
+    <form id="form">
+        <input id="name-input" placeholder="名前" value="ななし">
+        <input id="input" autocomplete="off" placeholder="メッセージ..." /><button id="send">送信</button>
     </form>
+
     <script>
         var socket = io();
         var form = document.getElementById('form');
         var input = document.getElementById('input');
+        var nameInput = document.getElementById('name-input');
         var messages = document.getElementById('messages');
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             if (input.value) {
-                socket.emit('chat message', input.value);
+                const data = {
+                    name: nameInput.value || 'ななし',
+                    message: input.value,
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                };
+                socket.emit('chat message', data);
                 input.value = '';
             }
         });
-        socket.on('chat message', function(msg) {
+
+        socket.on('chat message', function(data) {
             var item = document.createElement('li');
-            item.innerHTML = '<div class="msg-text">' + msg + '</div>';
+            // 自分の名前と一致するかで左右を分ける（簡易判定）
+            item.classList.add(data.name === nameInput.value ? 'mine' : 'others');
+            
+            item.innerHTML = `
+                <div class="name">${data.name}</div>
+                <div class="msg-text">${data.message}</div>
+                <div class="time">${data.time}</div>
+            `;
             messages.appendChild(item);
-            window.scrollTo(0, document.body.scrollHeight);
+            messages.scrollTop = messages.scrollHeight;
         });
     </script>
 </body>
