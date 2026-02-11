@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/mochi1109213-moji/mocimochi-chat2#readme",
   "dependencies": {
-    "express": "^5.2.1",
+    "express": "^4.21.2",
     "socket.io": "^4.8.3",
     "pg": "^8.11.0"
   }
