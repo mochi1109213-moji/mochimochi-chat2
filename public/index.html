@@ -5,14 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: sans-serif; background-color: #7494c0; margin: 0; display: flex; flex-direction: column; hieght: 100vh; }
-        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; height: 80vh; }
+        body { font-family: sans-serif; background-color: #7494c0; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        #messages { list-style-type: none; margin: 0; padding: 20px; flex-grow: 1; overflow-y: auto; }
         #messages li { margin-bottom: 15px; clear: both; }
-        .msg-text { padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 70%; word-wrap: break-word; }
-        .mine { float: right; }
-        .mine .msg-text { background-color: #8de055; }
-        .others { float: left; }
-        .others .msg-text { background-color: white; }
+        .msg-text { padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 70%; word-wrap: break-word; background-color: white; }
         #form { background: white; padding: 10px; display: flex; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; }
         #input { border: 1px solid #ccc; padding: 10px; flex-grow: 1; border-radius: 20px; outline: none; }
         #send { border: none; background: #8de055; padding: 0 20px; margin-left: 5px; border-radius: 20px; font-weight: bold; }
@@ -23,13 +19,11 @@
     <form id="form" action="">
         <input id="input" autocomplete="off" placeholder="メッセージを入力..." /><button id="send">送信</button>
     </form>
-
     <script>
         var socket = io();
         var form = document.getElementById('form');
         var input = document.getElementById('input');
         var messages = document.getElementById('messages');
-
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             if (input.value) {
@@ -37,10 +31,8 @@
                 input.value = '';
             }
         });
-
         socket.on('chat message', function(msg) {
             var item = document.createElement('li');
-            item.classList.add('others'); // 本来は自分か相手か判定が必要
             item.innerHTML = '<div class="msg-text">' + msg + '</div>';
             messages.appendChild(item);
             window.scrollTo(0, document.body.scrollHeight);
