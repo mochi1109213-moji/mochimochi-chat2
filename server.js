@@ -10,18 +10,23 @@ const client = new Client({
 });
 
 client.connect();
-client.query('CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, content TEXT)');
+
+// テーブルをアップデート（nameとtimeを追加）
+client.query('CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, name TEXT, content TEXT, time TEXT)');
 
 app.use(express.static('public'));
 
 io.on('connection', async (socket) => {
-  const res = await client.query('SELECT content FROM messages ORDER BY id ASC');
+  // 過去ログ取得
+  const res = await client.query('SELECT name, content, time FROM messages ORDER BY id ASC');
   res.rows.forEach(row => {
-    socket.emit('chat message', row.content);
+    socket.emit('chat message', { name: row.name, message: row.content, time: row.time });
   });
-  socket.on('chat message', async (msg) => {
-    await client.query('INSERT INTO messages (content) VALUES ($1)', [msg]);
-    io.emit('chat message', msg);
+
+  socket.on('chat message', async (data) => {
+    // DB保存
+    await client.query('INSERT INTO messages (name, content, time) VALUES ($1, $2, $3)', [data.name, data.message, data.time]);
+    io.emit('chat message', data);
   });
 });
 
